@@ -40,27 +40,29 @@ def diaplyAll(image, sinogram, reconstruction_fbp):
     plt.show()
 
 
-def emmiterPosition(alpha, r,displacement):
-    x = r * math.cos(math.radians(alpha))+displacement[0]
-    y = r * math.sin(math.radians(alpha))+displacement[0]
+def emmiterPosition(alpha, r, displacement):
+    x = r * math.cos(math.radians(alpha)) + displacement[0]
+    y = r * math.sin(math.radians(alpha)) + displacement[0]
     return [round(x), round(y)]
 
 
-def sensorPosition(alpha, r, n, theta,displacement):
+def sensorPosition(alpha, r, n, theta, displacement):
     result = []
     for i in range(n):
         x = r * math.cos(
             math.radians(alpha) + math.pi - (math.radians(theta) / 2) + i * (math.radians(theta) / (n - 1)))
         y = r * math.sin(
             math.radians(alpha) + math.pi - (math.radians(theta) / 2) + i * (math.radians(theta) / (n - 1)))
-        result.append([round(x+displacement[0]), round(y+displacement[0])])
+        result.append([round(x + displacement[0]), round(y + displacement[0])])
     return result
 
 
-def wartoscPiksela(image, x, y):
+def wartoscPiksela(image, x, y, srednia, liczbaPikseli):
     if x < 0 or y < 0 or x >= len(image[0]) or y >= len(image):
-        return 0, 0
-    return image[y][x], 1
+        return srednia,liczbaPikseli
+    srednia += image[y][x]
+    liczbaPikseli += 1
+    return srednia,liczbaPikseli
 
 
 def sredniaBresenhama(image, p1, p2):
@@ -81,13 +83,11 @@ def sredniaBresenhama(image, p1, p2):
     if y1 > y2:
         yi = -1
         dy = -dy
-    w, k = wartoscPiksela(image, x, y)
-    srednia = w
-    liczbaPikseli = k
+    srednia, liczbaPikseli = wartoscPiksela(image, x, y, 0,0)
     # gdy wiodaca OX
     if dx > dy:
         ai = (dy - dx) * 2
-        bi = dy * 2;
+        bi = dy * 2
         d = bi - dx
         while x != x2:
             if d >= 0:
@@ -97,9 +97,7 @@ def sredniaBresenhama(image, p1, p2):
             else:
                 d += bi
                 x += xi
-            w, k = wartoscPiksela(image, x, y)
-            srednia += w
-            liczbaPikseli += k
+            srednia,liczbaPikseli = wartoscPiksela(image, x, y, srednia, liczbaPikseli)
     # gdy wiodaca OY
     else:
         ai = (dx - dy) * 2
@@ -113,17 +111,19 @@ def sredniaBresenhama(image, p1, p2):
             else:
                 d += bi
                 y += yi
-            w, k = wartoscPiksela(image, x, y)
-            srednia += w
-            liczbaPikseli += k
-    return srednia / liczbaPikseli
+            srednia,liczbaPikseli = wartoscPiksela(image, x, y, srednia, liczbaPikseli)
+    # print(p1,p2,srednia,liczbaPikseli)
+    return 0 if liczbaPikseli==0 else srednia / liczbaPikseli
 
-def dodajDoPiksela(image, x, y,w):
+
+def dodajDoPiksela(image, x, y, w, normal):
     if x < 0 or y < 0 or x >= len(image[0]) or y >= len(image):
         return
-    image[y][x]+=w
+    image[y][x] += w
+    normal[y][x] += 1
 
-def dodawanieBresenhama(image, p1, p2,w):
+
+def dodawanieBresenhama(image, p1, p2, w, normal):
     # zmienne
     x1 = x = p1[0]
     y1 = y = p1[1]
@@ -141,7 +141,7 @@ def dodawanieBresenhama(image, p1, p2,w):
     if y1 > y2:
         yi = -1
         dy = -dy
-    dodajDoPiksela(image, x, y,w)
+    dodajDoPiksela(image, x, y, w, normal)
     # gdy wiodaca OX
     if dx > dy:
         ai = (dy - dx) * 2
@@ -155,7 +155,7 @@ def dodawanieBresenhama(image, p1, p2,w):
             else:
                 d += bi
                 x += xi
-                dodajDoPiksela(image, x, y,w)
+                dodajDoPiksela(image, x, y, w, normal)
 
     # gdy wiodaca OY
     else:
@@ -170,53 +170,67 @@ def dodawanieBresenhama(image, p1, p2,w):
             else:
                 d += bi
                 y += yi
-            dodajDoPiksela(image, x, y,w)
+            dodajDoPiksela(image, x, y, w, normal)
+
 
 def tomographing(image, alphaStep, SensorCount, theta):
-    r = math.sqrt(image.shape[0] ** 2 + image.shape[1] ** 2)/2
-    imageMiddle=(image.shape[0]//2,image.shape[1]//2)
-    sinogram=[]
-    emitters=[]
-    sensors=[]
-    katy=range(0, 360, alphaStep)
+    r = math.sqrt(image.shape[0] ** 2 + image.shape[1] ** 2) / 2
+    imageMiddle = (image.shape[0] // 2, image.shape[1] // 2)
+    sinogram = []
+    emitters = []
+    sensors = []
+    katy = range(0, 360, alphaStep)
     print('Tworzenie sinogramu')
     for i in katy:
-        kolumnaSinogramu=[]
-        emitterPos = emmiterPosition(i, r,imageMiddle)
+        kolumnaSinogramu = []
+        emitterPos = emmiterPosition(i, r, imageMiddle)
         emitters.append(emitterPos)
-        sensorPos = sensorPosition(i, r, SensorCount, theta,imageMiddle)
+        sensorPos = sensorPosition(i, r, SensorCount, theta, imageMiddle)
         sensors.append(sensorPos)
-        print('\r{}/360'.format(i+1), end='')
+        print('\r{}/360'.format(i + 1), end='')
         # print(emmiterPos)
         # print(sensorPos)
         for sensor in sensorPos:
-            kolumnaSinogramu.append(sredniaBresenhama(image,emitterPos,sensor))
+            kolumnaSinogramu.append(sredniaBresenhama(image, emitterPos, sensor))
         sinogram.append(kolumnaSinogramu)
-    sinogram=np.array(sinogram)
+    sinogram = np.array(sinogram)
     plt.imshow(sinogram.T, cmap=plt.cm.Greys_r)
     plt.show()
     print('\nTworzenie rekonstrukcji')
-    reconstructed=[]
+    reconstructed = []
+    normal = []
     for i in range(image.shape[1]):
+        normal.append([])
         reconstructed.append([])
         for j in range(image.shape[0]):
             reconstructed[i].append(0)
+            normal[i].append(0)
     for i in range(len(katy)):
         print('\r{}/360'.format(katy[i] + 1), end='')
-        for j,sensor in enumerate(sensors[i]):
-            dodawanieBresenhama(reconstructed,emitters[i],sensor,sinogram[i][j])
+        for j, sensor in enumerate(sensors[i]):
+            dodawanieBresenhama(reconstructed, emitters[i], sensor, sinogram[i][j], normal)
+    max=0
+    for i in range(image.shape[0]):
+        for j in range(image.shape[1]):
+            if normal[i][j] > 0:
+                reconstructed[i][j] /= normal[i][j]
+            max = max if max>reconstructed[i][j] else reconstructed[i][j]
+    # for i in range(image.shape[0]):
+    #     for j in range(image.shape[1]):
+    #         reconstructed[i][j] /= max
     plt.imshow(reconstructed, cmap=plt.cm.Greys_r)
     plt.show()
+    return sinogram.T, reconstructed
 
 
 if __name__ == '__main__':
     image = imread(data_dir + "/phantom.png", as_gray=True)
-    # image = imread("./Kwadraty2.png", as_gray=True)
+    # image = imread("/obrazy/Kolo.png", as_gray=True)
     image = rescale(image, scale=0.4, mode='reflect', multichannel=False)
-    plt.imshow(image, cmap=plt.cm.Greys_r)
-    plt.show()
-    tomographing(image, 1, 90, 1)
+    # plt.imshow(image, cmap=plt.cm.Greys_r)
+    # plt.show()
+    sinogram, reconstruction = tomographing(image, alphaStep=1, SensorCount=180, theta=180)
     # theta = np.linspace(0., 180., max(image.shape), endpoint=False)
     # sinogram = sinogramWithSkimage(image, theta)
     # reconstruction = backProjectionWithSkimage(sinogram, theta)
-    # diaplyAll(image, sinogram, reconstruction)
+    diaplyAll(image, sinogram, reconstruction)
