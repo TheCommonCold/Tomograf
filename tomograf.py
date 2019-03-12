@@ -179,13 +179,13 @@ def dodawanieBresenhama(image, p1, p2, w, normal):
 def normalize(img):
     min = max = img[0][0]
 
-    for i in range(image.shape[0]):
-        for j in range(image.shape[1]):
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
             max = max if max > img[i][j] else img[i][j]
             min = min if min < img[i][j] else img[i][j]
     print(min, max)
-    for i in range(image.shape[0]):
-        for j in range(image.shape[1]):
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
             img[i][j] = (img[i][j] - min) / max
 
 
@@ -249,7 +249,8 @@ def tomographing(image, alphaStep, SensorCount, theta):
     return sinogram, reconstructed, normal
 
 
-if __name__ == '__main__':
+def tomograf(filePath):
+    print(filePath)
     image = imread(data_dir + "/phantom.png", as_gray=True)
     # image = imread("/obrazy/Kolo.png", as_gray=True)
     image = rescale(image, scale=0.4, mode='reflect', multichannel=False)
