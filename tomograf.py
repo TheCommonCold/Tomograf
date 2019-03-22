@@ -66,9 +66,9 @@ def wartoscPiksela(image, x, y, srednia, liczbaPikseli):
     liczbaPikseli += 1
     return srednia, liczbaPikseli
 
-
-def sredniaBresenhama(image, p1, p2):
+def Bresenham(p1,p2):
     # zmienne
+    lista=[]
     x1 = x = p1[0]
     y1 = y = p1[1]
     x2 = p2[0]
@@ -85,7 +85,7 @@ def sredniaBresenhama(image, p1, p2):
     if y1 > y2:
         yi = -1
         dy = -dy
-    srednia, liczbaPikseli = wartoscPiksela(image, x, y, 0, 0)
+    lista.append([x,y])
     # gdy wiodaca OX
     if dx > dy:
         ai = (dy - dx) * 2
@@ -99,7 +99,7 @@ def sredniaBresenhama(image, p1, p2):
             else:
                 d += bi
                 x += xi
-            srednia, liczbaPikseli = wartoscPiksela(image, x, y, srednia, liczbaPikseli)
+            lista.append([x,y])
     # gdy wiodaca OY
     else:
         ai = (dx - dy) * 2
@@ -113,8 +113,15 @@ def sredniaBresenhama(image, p1, p2):
             else:
                 d += bi
                 y += yi
-            srednia, liczbaPikseli = wartoscPiksela(image, x, y, srednia, liczbaPikseli)
+            lista.append([x,y])
     # print(p1,p2,srednia,liczbaPikseli)
+    return lista
+
+def sredniaBresenhama(image, p1, p2):
+    lista=Bresenham(p1,p2)
+    srednia=liczbaPikseli=0
+    for i in lista:
+        srednia, liczbaPikseli = wartoscPiksela(image, i[0], i[1], srednia, liczbaPikseli)
     return 0 if liczbaPikseli == 0 else srednia / liczbaPikseli
 
 
@@ -124,56 +131,10 @@ def dodajDoPiksela(image, x, y, w, normal):
     image[y][x] += w
     normal[y][x] += 1
 
-
 def dodawanieBresenhama(image, p1, p2, w, normal):
-    # zmienne
-    x1 = x = p1[0]
-    y1 = y = p1[1]
-    x2 = p2[0]
-    y2 = p2[1]
-    # ustalanie kierunku x
-    xi = 1
-    dx = x2 - x1
-    if x1 > x2:
-        xi = -1
-        dx = -dx
-    # ustalanie kierunku y
-    yi = 1
-    dy = y2 - y1
-    if y1 > y2:
-        yi = -1
-        dy = -dy
-    dodajDoPiksela(image, x, y, w, normal)
-    # gdy wiodaca OX
-    if dx > dy:
-        ai = (dy - dx) * 2
-        bi = dy * 2
-        d = bi - dx
-        while x != x2:
-            if d >= 0:
-                x += xi
-                y += yi
-                d += ai
-            else:
-                d += bi
-                x += xi
-                dodajDoPiksela(image, x, y, w, normal)
-
-    # gdy wiodaca OY
-    else:
-        ai = (dx - dy) * 2
-        bi = dx * 2
-        d = bi - dy
-        while y != y2:
-            if d >= 0:
-                x += xi
-                y += yi
-                d += ai
-            else:
-                d += bi
-                y += yi
-            dodajDoPiksela(image, x, y, w, normal)
-
+   lista=Bresenham(p1,p2)
+   for i in lista:
+        dodajDoPiksela(image, i[0],i[1], w, normal)
 
 def normalizeWithOffset(img,offset=(0,0,0,0)):
     min = max = img[0][0]
