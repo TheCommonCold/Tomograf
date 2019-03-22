@@ -1,15 +1,41 @@
 import sys
 import random
-import skimage
+
+from kivy.app import App
+from kivy.uix.button import Button
+from kivy.graphics import *
+from kivy.uix.button import Button
+from kivy.uix.widget import Widget
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.slider import Slider
+from kivy.uix.label import Label
+
+
+from kivy.app import App
+from kivy.graphics import Mesh
+from array import array
+from functools import partial
+from math import cos, sin, pi
+
+
+import kivy.graphics.texture
 
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import pydicom
+from pydicom.data import get_testdata_files
 
 from skimage.io import imread
 from skimage import data_dir
 from skimage.transform import radon, rescale, iradon
+from ipywidgets import interact, interactive, fixed, interact_manual
+import ipywidgets as widgets
 import warnings
+
+from kivy.config import Config
+Config.set('graphics', 'width', '500')
+Config.set('graphics', 'height', '500')
 
 warnings.filterwarnings("ignore")
 
@@ -229,8 +255,9 @@ def obniz(img,n, offset=(0, 0, 0, 0)):
     przytijZera(img)
     return img
 
-def tomographing(image, alphaStep, SensorCount, theta):
+def tomographing(image, alphaStep, SensorCount, theta, scaleR):
     r = math.sqrt(image.shape[0] ** 2 + image.shape[1] ** 2) / 2
+    r=r*scaleR;
     imageMiddle = (image.shape[0] // 2, image.shape[1] // 2)
     sinogram = []
     emitters = []
@@ -271,28 +298,92 @@ def tomographing(image, alphaStep, SensorCount, theta):
     for i in range(image.shape[0]):
         for j in range(image.shape[1]):
             reconstructed[i][j] /= normal[i][j]
-    normalize(reconstructed,0.08)
+    normalize(reconstructed,0.8)
     pokaz(reconstructed)
-    x=0.05
-    for i in range(math.ceil(1/x)-10):
-        obniz(reconstructed,x)
-        pokaz(reconstructed)
     return sinogram, reconstructed, normal
 
 
-def tomograf(filePath=0):
+def tomograf(alphaStep=0.5, SensorCount=181, theta=180,scaleR=1):
+    filePath=0
     print(filePath)
-    image = imread(data_dir + "/phantom.png", as_gray=True)
+    filename = get_testdata_files("CT_small.dcm")[0]
+    ds = pydicom.dcmread(filename)
+    image=ds.pixel_array
+    #image = imread(data_dir + "/phantom.png", as_gray=True)
     # image = imread("./obrazy/Kolo.jpg", as_gray=True)
-    image = rescale(image, scale=0.4, mode='reflect', multichannel=False)
+    #image = rescale(image, scale=0.4, mode='reflect', multichannel=False)
     # plt.imshow(image, cmap=plt.cm.Greys_r)
     # plt.show()
-    sinogram, reconstruction, normal = tomographing(image, alphaStep=0.5, SensorCount=181, theta=270)
+    sinogram, reconstruction, normal = tomographing(image, alphaStep, SensorCount, theta,scaleR)
     diaplyAll(image, sinogram, reconstruction, normal)
     # theta = np.linspace(0., 180., max(image.shape), endpoint=False)
     # sinogram = sinogramWithSkimage(image, theta)
     # reconstruction = backProjectionWithSkimage(sinogram, theta)
     # diaplyAll(image, sinogram, reconstruction, normal)
 
+
+class TestApp(App):
+    def convert(self,image,pic,*largs):
+        max = image.max()
+        min = image.min()
+        image = np.flip(image, 0)
+        image = [int((x - min) * 255 / (max - min)) for x in image.ravel()]
+        arr=array('B', image)
+        pic.blit_buffer(arr, colorfmt='luminance', bufferfmt='ubyte')
+        return arr
+
+    def change_mode(self, mode,image, *largs):
+        if mode=='scan':
+            sinogram, reconstruction, normal = tomographing(image,3, 100, 180,1)
+            diaplyAll(image, sinogram, reconstruction, normal)
+
+            pic1 = kivy.graphics.texture.Texture.create(size=(sinogram.shape[1], sinogram.shape[0]))
+            self.convert(sinogram,pic1)
+            pic2 = kivy.graphics.texture.Texture.create(size=(image.shape[1], image.shape[0]))
+            self.convert(image, pic2)
+            pic3 = kivy.graphics.texture.Texture.create(size=(image.shape[1], image.shape[0]))
+            self.convert(normal, pic3)
+
+            with self.cnvs.canvas:
+                Rectangle(texture=pic1, pos=(250 + 10, 270), size=(200, 200))
+                Rectangle(texture=pic2, pos=(250 - 200 - 10, 60), size=(200, 200))
+                Rectangle(texture=pic3, pos=(250 + 10, 60), size=(200, 200))
+
+    def build(self):
+
+        self.cnvs = Widget()
+        with self.cnvs.canvas:
+            Color(1, 1, 1)
+
+        filename = get_testdata_files("CT_small.dcm")[0]
+        ds = pydicom.dcmread(filename)
+        image = ds.pixel_array
+        image = imread("./obrazy/Shepp_logan.jpg", as_gray=True)
+        image = rescale(image, scale=0.4, mode='reflect', multichannel=False)
+
+        #sliders=BoxLayout(orientation='vertical')
+        #sliders.add_widget(Label(text="number of sliders"))
+        #sliders.add_widget(Slider(min=30, max=300, value=160))
+
+        self.pic = kivy.graphics.texture.Texture.create(size=(image.shape[1],image.shape[0]))
+        self.convert(image,self.pic)
+
+        with self.cnvs.canvas:
+            Rectangle(texture=self.pic, pos=(250-200-10, 270), size=(200, 200))
+        buttons = BoxLayout(size_hint=(1, None), height=50)
+        for mode in ('scan','save'):
+            button = Button(text=mode)
+            button.bind(on_release=partial(self.change_mode, mode,image))
+            buttons.add_widget(button)
+
+        root = BoxLayout(orientation='vertical')
+        root.add_widget(self.cnvs)
+        #root.add_widget(sliders)
+        root.add_widget(buttons)
+
+        return root
+
+
 if __name__=='__main__':
-    tomograf(0)
+    TestApp().run()
+    #tomograf(0.01, 160, 180,1);
