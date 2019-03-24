@@ -11,7 +11,9 @@ from kivy.uix.slider import Slider
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.checkbox import CheckBox
+from pydicom.filewriter import write_file
 import datetime
+from dicom_files import create_dcm_file
 
 from kivy.app import App
 from kivy.graphics import Mesh
@@ -27,6 +29,7 @@ import matplotlib.pyplot as plt
 import math
 import pydicom
 from pydicom.data import get_testdata_files
+import dicom_files
 
 from skimage.io import imread
 from skimage import data_dir
@@ -256,16 +259,6 @@ class TestApp(App):
                 while len(tempSinogram)<len(katy):
                     tempSinogram.append(np.zeros(SensorCount))
                 self.sinograms.append(np.array(tempSinogram).T)
-    pokaz(sinogram)
-    # Filtrowanie
-    sinogram = normalize(sinogram)
-    sinogram = VerticalFiltering(np.array(sinogram), [-3,7,-3])
-    sinogram=przytnij(sinogram)
-    pokaz(sinogram)
-    print('\nTworzenie rekonstrukcji')
-    # Init Rekonstrukcji
-    reconstructed = np.zeros(image.shape)
-    normal = np.zeros(image.shape)
 
         sinogram = np.array(sinogram).T
 
@@ -273,7 +266,7 @@ class TestApp(App):
         # Filtrowanie
         sinogram = normalize(sinogram)
         sinogram = VerticalFiltering(np.array(sinogram), [-3, 7, -3])
-        sinogram = przytijZera(sinogram)
+        sinogram = przytnij(sinogram)
         pokaz(sinogram)
         if self.checkboxRemember.active:
             self.sinograms.append(sinogram)
@@ -300,7 +293,8 @@ class TestApp(App):
             for j in range(image.shape[1]):
                 reconstructed[i][j] /= normal[i][j]
         normalize(reconstructed, 0.8)
-        reconstructed=wyostrz(reconstructed)
+        if self.checkboxSplot.active:
+            reconstructed=wyostrz(reconstructed)
         pokaz(reconstructed)
         if self.checkboxRemember.active:
             self.reconstructions.append(np.array(reconstructed))
@@ -346,21 +340,18 @@ class TestApp(App):
             self.pic1 = kivy.graphics.texture.Texture.create(size=(360/self.alphaStar.value, self.sensorCount.value))
             with self.cnvs.canvas:
                 Rectangle(texture=self.pic1, pos=(220, 370), size=(200, 200))
-            sinogram, reconstruction, normal = self.tomographing(self.image,self.alphaStar.value, self.sensorCount.value, self.theta.value,self.rScale.value,self.imageScale.value)
-            diaplyAll(self.image, sinogram, reconstruction, normal)
+            sinogram, self.reconstruction, normal = self.tomographing(self.image,self.alphaStar.value, self.sensorCount.value, self.theta.value,self.rScale.value,self.imageScale.value)
+            diaplyAll(self.image, sinogram, self.reconstruction, normal)
             self.convert(sinogram, self.pic1)
-            self.pic2 = kivy.graphics.texture.Texture.create(size=(reconstruction.shape[1], reconstruction.shape[0]))
-            self.convert(reconstruction, self.pic2)
-            pic3 = kivy.graphics.texture.Texture.create(size=(reconstruction.shape[1], reconstruction.shape[0]))
+            self.pic2 = kivy.graphics.texture.Texture.create(size=(self.reconstruction.shape[1], self.reconstruction.shape[0]))
+            self.convert(self.reconstruction.copy(), self.pic2)
+            pic3 = kivy.graphics.texture.Texture.create(size=(self.reconstruction.shape[1], self.reconstruction.shape[0]))
             self.convert(normal, pic3)
 
             with self.cnvs.canvas:
                 Rectangle(texture=self.pic2, pos=(440, 370), size=(200, 200))
                 Rectangle(texture=pic3, pos=(660 + 10, 370), size=(200, 200))
 
-            if self.checkboxJPG.active==0:
-                self.ds.Rows, self.ds.Columns = reconstruction.shape
-                self.ds.PixelData=np.array(reconstruction, dtype=np.uint8).tobytes()
 
             if self.scanned==1:
                 App.get_running_app().root.remove_widget(self.timeSlider)
@@ -370,10 +361,9 @@ class TestApp(App):
                 App.get_running_app().root.add_widget(self.timeSlider)
                 self.scanned = 1
         if mode=='save':
-            self.ds.ContentDate = self.date.text
-            self.ds.PatientName=self.name.text+'^'+self.surname.text
-            self.ds.ImageComments=self.comment.text
-            self.ds.save_as("output.dcm")
+            self.final_dicom=create_dcm_file(self.reconstruction,self.name.text+'^'+self.surname.text,self.date.text,self.comment.text)
+            write_file(filename='output.dcm', dataset=self.final_dicom)
+
         if mode=='load':
             if self.checkboxJPG.active:
                 self.image = imread(self.filename.text, as_gray=True)
@@ -382,10 +372,7 @@ class TestApp(App):
                     self.ds = pydicom.dcmread(self.filename.text)
                 except:
                     None
-                try:
-                    self.image = self.ds.pixel_array
-                except:
-                    None
+                self.image = self.ds.pixel_array
                 try:
                     pat_name = self.ds.PatientName
                 except:
@@ -394,7 +381,7 @@ class TestApp(App):
                 self.surname.text = pat_name.given_name
                 self.date.text = datetime.datetime.now().strftime('%Y%m%d')
                 try:
-                    self.comment.text = self.ds.ImageComments
+                    self.comment.text = self.ds.StudyDescription
                 except:
                     None
             self.pic = kivy.graphics.texture.Texture.create(size=(self.image.shape[1], self.image.shape[0]))
