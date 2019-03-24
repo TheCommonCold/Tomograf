@@ -15,6 +15,17 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+def bladSredniokwadratowy(img,img2):
+    for i in range(2):
+        if img.shape[i]!=img2.shape[i]:
+            print("Obrazy są róznych wymiarów")
+            return -1.567
+    blad=0.0
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
+            blad+=((img[i][j]-img2[i][j])**2)/(img.shape[0]*img.shape[1])
+    return blad
+
 
 def sinogramWithSkimage(image, theta):
     return radon(image, theta=theta, circle=True)
@@ -254,5 +265,4 @@ def tomograf(filePath=0):
     # diaplyAll(image, sinogram, reconstruction, normal)
 
 if __name__=='__main__':
-    print(1/9*np.array([[1,1,1],[1,1,1],[1,1,1]]))
-    # print(splot(np.array([[1,2,3],[4,50,6],[7,8,9]]),np.array([[1,1,1],[1,1,1],[1,1,1]])))
+    tomograf(0)
