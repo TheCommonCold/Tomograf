@@ -31,8 +31,8 @@ from pydicom.data import get_testdata_files
 from skimage.io import imread
 from skimage import data_dir
 from skimage.transform import radon, rescale, iradon
-from ipywidgets import interact, interactive, fixed, interact_manual
-import ipywidgets as widgets
+
+from wyostrzanie import przytnij
 import warnings
 
 from kivy.config import Config
@@ -40,6 +40,17 @@ Config.set('graphics', 'width', '900')
 Config.set('graphics', 'height', '600')
 
 warnings.filterwarnings("ignore")
+
+def bladSredniokwadratowy(img,img2):
+    for i in range(2):
+        if img.shape[i]!=img2.shape[i]:
+            print("Obrazy są róznych wymiarów")
+            return -1.567
+    blad=0.0
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
+            blad+=((img[i][j]-img2[i][j])**2)/(img.shape[0]*img.shape[1])
+    return blad
 
 
 def sinogramWithSkimage(image, theta):
@@ -94,9 +105,9 @@ def wartoscPiksela(image, x, y, srednia, liczbaPikseli):
     liczbaPikseli += 1
     return srednia, liczbaPikseli
 
-
-def sredniaBresenhama(image, p1, p2):
+def Bresenham(p1,p2):
     # zmienne
+    lista=[]
     x1 = x = p1[0]
     y1 = y = p1[1]
     x2 = p2[0]
@@ -113,7 +124,7 @@ def sredniaBresenhama(image, p1, p2):
     if y1 > y2:
         yi = -1
         dy = -dy
-    srednia, liczbaPikseli = wartoscPiksela(image, x, y, 0, 0)
+    lista.append([x,y])
     # gdy wiodaca OX
     if dx > dy:
         ai = (dy - dx) * 2
@@ -127,7 +138,7 @@ def sredniaBresenhama(image, p1, p2):
             else:
                 d += bi
                 x += xi
-            srednia, liczbaPikseli = wartoscPiksela(image, x, y, srednia, liczbaPikseli)
+            lista.append([x,y])
     # gdy wiodaca OY
     else:
         ai = (dx - dy) * 2
@@ -141,8 +152,15 @@ def sredniaBresenhama(image, p1, p2):
             else:
                 d += bi
                 y += yi
-            srednia, liczbaPikseli = wartoscPiksela(image, x, y, srednia, liczbaPikseli)
+            lista.append([x,y])
     # print(p1,p2,srednia,liczbaPikseli)
+    return lista
+
+def sredniaBresenhama(image, p1, p2):
+    lista=Bresenham(p1,p2)
+    srednia=liczbaPikseli=0
+    for i in lista:
+        srednia, liczbaPikseli = wartoscPiksela(image, i[0], i[1], srednia, liczbaPikseli)
     return 0 if liczbaPikseli == 0 else srednia / liczbaPikseli
 
 
@@ -152,58 +170,12 @@ def dodajDoPiksela(image, x, y, w, normal):
     image[y][x] += w
     normal[y][x] += 1
 
-
 def dodawanieBresenhama(image, p1, p2, w, normal):
-    # zmienne
-    x1 = x = p1[0]
-    y1 = y = p1[1]
-    x2 = p2[0]
-    y2 = p2[1]
-    # ustalanie kierunku x
-    xi = 1
-    dx = x2 - x1
-    if x1 > x2:
-        xi = -1
-        dx = -dx
-    # ustalanie kierunku y
-    yi = 1
-    dy = y2 - y1
-    if y1 > y2:
-        yi = -1
-        dy = -dy
-    dodajDoPiksela(image, x, y, w, normal)
-    # gdy wiodaca OX
-    if dx > dy:
-        ai = (dy - dx) * 2
-        bi = dy * 2
-        d = bi - dx
-        while x != x2:
-            if d >= 0:
-                x += xi
-                y += yi
-                d += ai
-            else:
-                d += bi
-                x += xi
-                dodajDoPiksela(image, x, y, w, normal)
+   lista=Bresenham(p1,p2)
+   for i in lista:
+        dodajDoPiksela(image, i[0],i[1], w, normal)
 
-    # gdy wiodaca OY
-    else:
-        ai = (dx - dy) * 2
-        bi = dx * 2
-        d = bi - dy
-        while y != y2:
-            if d >= 0:
-                x += xi
-                y += yi
-                d += ai
-            else:
-                d += bi
-                y += yi
-            dodajDoPiksela(image, x, y, w, normal)
-
-
-def normalizeWithOffset(img, offset=(0, 0, 0, 0)):
+def normalizeWithOffset(img,offset=(0,0,0,0)):
     min = max = img[0][0]
     # offsety są góra,lewo,dół, prawo
     for i in range(offset[0], img.shape[0] - offset[2]):
@@ -214,7 +186,7 @@ def normalizeWithOffset(img, offset=(0, 0, 0, 0)):
     for i in range(0, img.shape[0]):
         for j in range(0, img.shape[1]):
             img[i][j] = (img[i][j] - min) / max
-    img = przytijZera(img)
+    img=przytnij(img)
     return img
 
 
@@ -231,33 +203,26 @@ def VerticalFiltering(image, mask):
     new = np.zeros(image.shape)
     margines = len(mask) // 2
 
-    for i in range(margines, len(image) - margines):
+    for i in range(0, len(image)):
         for j in range(len(image[i])):
-            for k in range(len(mask)):
-                new[i][j] += image[i - margines + k][j] * mask[k]
+            if i < margines or i >= len(image) - margines:
+                new[i][j] = image[i][j]
+            else:
+                for k in range(len(mask)):
+                    new[i][j] += image[i - margines + k][j] * mask[k]
     return new
-
 
 def pokaz(img):
     plt.imshow(img, cmap=plt.cm.Greys_r)
     plt.show()
 
 
-def przytijZera( img, offset=(0, 0, 0, 0)):
+
+def obniz(img,n, offset=(0, 0, 0, 0)):
     for i in range(offset[0], img.shape[0] - offset[2]):
         for j in range(offset[1], img.shape[1] - offset[3]):
-            if img[i][j] < 0:
-                img[i][j] = 0
-            elif img[i][j] > 1:
-                img[i][j] = 1
-    return img
-
-
-def obniz(img, n, offset=(0, 0, 0, 0)):
-    for i in range(offset[0], img.shape[0] - offset[2]):
-        for j in range(offset[1], img.shape[1] - offset[3]):
-            img[i][j] -= n
-    przytijZera(img)
+            img[i][j]-=n
+    przytnij(img)
     return img
 
 def wyostrz(img,n=5):
@@ -291,6 +256,16 @@ class TestApp(App):
                 while len(tempSinogram)<len(katy):
                     tempSinogram.append(np.zeros(SensorCount))
                 self.sinograms.append(np.array(tempSinogram).T)
+    pokaz(sinogram)
+    # Filtrowanie
+    sinogram = normalize(sinogram)
+    sinogram = VerticalFiltering(np.array(sinogram), [-3,7,-3])
+    sinogram=przytnij(sinogram)
+    pokaz(sinogram)
+    print('\nTworzenie rekonstrukcji')
+    # Init Rekonstrukcji
+    reconstructed = np.zeros(image.shape)
+    normal = np.zeros(image.shape)
 
         sinogram = np.array(sinogram).T
 
