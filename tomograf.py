@@ -9,6 +9,8 @@ import math
 from skimage.io import imread
 from skimage import data_dir
 from skimage.transform import radon, rescale, iradon
+
+from wyostrzanie import przytnij
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -147,7 +149,7 @@ def normalizeWithOffset(img,offset=(0,0,0,0)):
     for i in range(0, img.shape[0]):
         for j in range(0, img.shape[1]):
             img[i][j] = (img[i][j] - min) / max
-    img=przytijZera(img)
+    img=przytnij(img)
     return img
 
 def normalize(img,percent=1.0):
@@ -162,32 +164,28 @@ def VerticalFiltering(image, mask):
     new = np.zeros(image.shape)
     margines = len(mask) // 2
 
-    for i in range(margines, len(image) - margines):
+    for i in range(0, len(image)):
         for j in range(len(image[i])):
-            for k in range(len(mask)):
-                new[i][j] += image[i - margines + k][j] * mask[k]
+            if i < margines or i >= len(image) - margines:
+                new[i][j] = image[i][j]
+            else:
+                for k in range(len(mask)):
+                    new[i][j] += image[i - margines + k][j] * mask[k]
     return new
+
+
 
 def pokaz(img):
     plt.imshow(img, cmap=plt.cm.Greys_r)
     plt.show()
 
 
-def przytijZera(img, offset=(0, 0, 0, 0)):
-
-    for i in range(offset[0], img.shape[0] - offset[2]):
-        for j in range(offset[1], img.shape[1] - offset[3]):
-            if img[i][j]<0:
-                img[i][j]=0
-            elif img[i][j]>1:
-                img[i][j] = 1
-    return img
 
 def obniz(img,n, offset=(0, 0, 0, 0)):
     for i in range(offset[0], img.shape[0] - offset[2]):
         for j in range(offset[1], img.shape[1] - offset[3]):
             img[i][j]-=n
-    przytijZera(img)
+    przytnij(img)
     return img
 
 def tomographing(image, alphaStep, SensorCount, theta):
@@ -214,7 +212,7 @@ def tomographing(image, alphaStep, SensorCount, theta):
     # Filtrowanie
     sinogram = normalize(sinogram)
     sinogram = VerticalFiltering(np.array(sinogram), [-3,7,-3])
-    sinogram=przytijZera(sinogram)
+    sinogram=przytnij(sinogram)
     pokaz(sinogram)
     print('\nTworzenie rekonstrukcji')
     # Init Rekonstrukcji
@@ -256,4 +254,5 @@ def tomograf(filePath=0):
     # diaplyAll(image, sinogram, reconstruction, normal)
 
 if __name__=='__main__':
-    tomograf(0)
+    print(1/9*np.array([[1,1,1],[1,1,1],[1,1,1]]))
+    # print(splot(np.array([[1,2,3],[4,50,6],[7,8,9]]),np.array([[1,1,1],[1,1,1],[1,1,1]])))
