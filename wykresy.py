@@ -92,27 +92,34 @@ nowe=[]
 for i in range(len(zwykle)):
     nowe.append(zwykle[i]*lista[i])
 # data to plot
-n_groups = 6
+n_groups = 5
+means_frank = zwykle
+means_guido = nowe
 
 # create plot
 fig, ax = plt.subplots()
 index = np.arange(n_groups)
 bar_width = 0.35
 opacity = 0.8
-print(zwykle)
-print(nowe)
-print(index)
-plt.bar(index,zwykle)
 
-plt.bar(index,nowe)
+rects1 = plt.bar(index, means_frank, bar_width,
+                 alpha=opacity,
+                 color='b',
+                 label='Niefiltrowane')
 
-plt.xlabel('Person')
-plt.ylabel('Scores')
-plt.title('Scores by person')
-plt.xticks(index + bar_width, ('A', 'B', 'C', 'D'))
+rects2 = plt.bar(index + bar_width, means_guido, bar_width,
+                 alpha=opacity,
+                 color='g',
+                 label='Filtrowane')
+
+plt.xlabel('Obraz')
+plt.ylabel('Błąd średniokwadratoiwy')
+plt.title('Zmiana błędu średniokwadratowego w zależności od zastosowania filtracji')
+plt.xticks(index + bar_width, listaNazw)
 plt.legend()
 
 plt.tight_layout()
+plt.savefig("Filtracja.png")
 plt.show()
 
 
