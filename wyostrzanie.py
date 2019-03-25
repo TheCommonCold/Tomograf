@@ -29,8 +29,10 @@ def splot(image, mask):
     return przytnij(new)
 
 def wyostrz(img):
-    return splot(img,np.array([[0,-1,0],[-1,5,-1],[0,-1,-0]]))
+    return gaussianBlur(img,3)
 
+def wyostrz2(img):
+    return splot(img, np.array([[0, -1, 0], [-1, 5, -1], [0, -1, -0]]))
 
 def boxBlur(img):
     return splot(img,1/9*np.array([[1,1,1],[1,1,1],[1,1,1]]))

@@ -6,13 +6,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
-from skimage.io import imread
+from skimage.io import imread,imsave
 from skimage import data_dir
 from skimage.transform import radon, rescale, iradon
 
-from wyostrzanie import przytnij
+from wyostrzanie import przytnij,wyostrz,boxBlur,gaussianBlur,unsharpMasking,wyostrz2
 import warnings
 
+test = False
 warnings.filterwarnings("ignore")
 
 def bladSredniokwadratowy(img,img2):
@@ -36,6 +37,8 @@ def backProjectionWithSkimage(sinogram, theta):
 
 
 def diaplyAll(image, sinogram, reconstruction_fbp, normal):
+    if test == False:
+        return
     fig, axes = plt.subplots(2, 2, figsize=(8, 8))
     imkwargs = dict(vmin=-0.2, vmax=0.2)
     axes[0, 0].set_title("Original")
@@ -72,12 +75,7 @@ def sensorPosition(alpha, r, n, theta, displacement):
     return result
 
 
-def wartoscPiksela(image, x, y, srednia, liczbaPikseli):
-    if x < 0 or y < 0 or x >= len(image[0]) or y >= len(image):
-        return srednia, liczbaPikseli
-    srednia += image[y][x]
-    liczbaPikseli += 1
-    return srednia, liczbaPikseli
+
 
 def Bresenham(p1,p2):
     # zmienne
@@ -130,19 +128,31 @@ def Bresenham(p1,p2):
     # print(p1,p2,srednia,liczbaPikseli)
     return lista
 
-def sredniaBresenhama(image, p1, p2):
+def wartoscPiksela(image, x, y, srednia, liczbaPikseli,normal):
+    if x < 0 or y < 0 or x >= len(image[0]) or y >= len(image):
+        return srednia, liczbaPikseli,normal
+    srednia += image[y][x]
+    liczbaPikseli += 1
+    normal[y][x] += 1
+    return srednia, liczbaPikseli,normal
+
+def sredniaBresenhama(image, p1, p2,normal):
     lista=Bresenham(p1,p2)
     srednia=liczbaPikseli=0
     for i in lista:
-        srednia, liczbaPikseli = wartoscPiksela(image, i[0], i[1], srednia, liczbaPikseli)
-    return 0 if liczbaPikseli == 0 else srednia / liczbaPikseli
+        srednia, liczbaPikseli,normal = wartoscPiksela(image, i[0], i[1], srednia, liczbaPikseli,normal)
+    return 0 if liczbaPikseli == 0 else srednia / liczbaPikseli, normal
 
 
 def dodajDoPiksela(image, x, y, w, normal):
     if x < 0 or y < 0 or x >= len(image[0]) or y >= len(image):
         return
-    image[y][x] += w
-    normal[y][x] += 1
+    normal[y][x]+=1
+    if normal[y][x]>1:
+        image[y][x]=((image[y][x]*(normal[y][x]-1))+w)/normal[y][x]
+    else:
+        image[y][x] = w
+
 
 def dodawanieBresenhama(image, p1, p2, w, normal):
    lista=Bresenham(p1,p2)
@@ -156,7 +166,6 @@ def normalizeWithOffset(img,offset=(0,0,0,0)):
         for j in range(offset[1],img.shape[1]-offset[3]):
             max = max if max > img[i][j] else img[i][j]
             min = min if min < img[i][j] else img[i][j]
-    print(min, max)
     for i in range(0, img.shape[0]):
         for j in range(0, img.shape[1]):
             img[i][j] = (img[i][j] - min) / max
@@ -187,6 +196,8 @@ def VerticalFiltering(image, mask):
 
 
 def pokaz(img):
+    if test == False:
+        return
     plt.imshow(img, cmap=plt.cm.Greys_r)
     plt.show()
 
@@ -207,6 +218,7 @@ def tomographing(image, alphaStep, SensorCount, theta):
     sensors = []
     katy = np.arange(0, 360, alphaStep)
     print('Tworzenie sinogramu')
+    normal = np.zeros(image.shape)
     for i in katy:
         kolumnaSinogramu = []
         emitterPos = emmiterPosition(i, r, imageMiddle)
@@ -215,54 +227,107 @@ def tomographing(image, alphaStep, SensorCount, theta):
         sensors.append(sensorPos)
         # print('\r{}/360'.format(i + katy[1]-katy[0]), end='')
         for sensor in sensorPos:
-            kolumnaSinogramu.append(sredniaBresenhama(image, emitterPos, sensor))
+            q,normal=sredniaBresenhama(image, emitterPos, sensor,normal)
+            kolumnaSinogramu.append(q)
         sinogram.append(kolumnaSinogramu)
     sinogram = np.array(sinogram).T
 
     pokaz(sinogram)
     # Filtrowanie
     sinogram = normalize(sinogram)
-    sinogram = VerticalFiltering(np.array(sinogram), [-3,7,-3])
+    sinogram = VerticalFiltering(np.array(sinogram), [-2,5,-2])
     sinogram=przytnij(sinogram)
     pokaz(sinogram)
     print('\nTworzenie rekonstrukcji')
     # Init Rekonstrukcji
     reconstructed = np.zeros(image.shape)
-    normal = np.zeros(image.shape)
-
+    normal2 = np.zeros(image.shape)
+    coIteracje=[]
     # Rekonstrukcja
     for i in range(len(katy)):
         # print('\r{}/360'.format(katy[i] + katy[1]-katy[0]), end='')
         for j, sensor in enumerate(sensors[i]):
-            dodawanieBresenhama(reconstructed, emitters[i], sensors[i][j], sinogram[j][i], normal)
+            dodawanieBresenhama(reconstructed, emitters[i], sensors[i][j], sinogram[j][i], normal2)
+        coIteracje.append(bladSredniokwadratowy(image,reconstructed))
     reconstructed = np.array(reconstructed)
-    pokaz(reconstructed)
     # Normalizacja
-    for i in range(image.shape[0]):
-        for j in range(image.shape[1]):
-            reconstructed[i][j] /= normal[i][j]
+    # for i in range(image.shape[0]):
+    #     for j in range(image.shape[1]):
+    #         reconstructed[i][j] /= normal2[i][j]
+    pokaz(image)
+    pokaz(reconstructed)
+
     normalize(reconstructed,0.08)
     pokaz(reconstructed)
-    x=0.05
-    for i in range(math.ceil(1/x)-10):
-        obniz(reconstructed,x)
-        pokaz(reconstructed)
-    return sinogram, reconstructed, normal
+    # imsave("org.png", image)
+    # imsave("recon.png",reconstructed)
+    zwyklyBlad=bladSredniokwadratowy(image,reconstructed)
+    filtrowane=[]
+    # funkcje=[wyostrz,boxBlur,lambda x:gaussianBlur(x,3),lambda x:gaussianBlur(x,5),unsharpMasking,wyostrz2]
+    funkcje = [lambda x: gaussianBlur(x, 3)]
+    for f in funkcje:
+        q=bladSredniokwadratowy(image, f(reconstructed.copy()))
+        filtrowane.append(q)
+    filtrowane = filtrowane[0]
+    # x=0.05
+    # for i in range(math.ceil(1/x)-10):
+    #     obniz(reconstructed,x)
+    #     pokaz(reconstructed)
+    return coIteracje,zwyklyBlad,filtrowane
 
 
-def tomograf(filePath=0):
-    print(filePath)
-    image = imread(data_dir + "/phantom.png", as_gray=True)
-    # image = imread("./obrazy/Kolo.jpg", as_gray=True)
-    image = rescale(image, scale=0.4, mode='reflect', multichannel=False)
+def tomograf(image,alphaStep=1,sensorCount=181,theta=270):
+
+    if theta<sensorCount:
+        sensorCount=theta
+    # image = imread(data_dir + "/phantom.png", as_gray=True)
+
     # plt.imshow(image, cmap=plt.cm.Greys_r)
     # plt.show()
-    sinogram, reconstruction, normal = tomographing(image, alphaStep=0.5, SensorCount=181, theta=270)
-    diaplyAll(image, sinogram, reconstruction, normal)
+    coIteracje,zwykly,filtry = tomographing(image, alphaStep=alphaStep, SensorCount=sensorCount, theta=theta)
+    return coIteracje,zwykly,filtry
+    # diaplyAll(image, sinogram, reconstruction, normal)
     # theta = np.linspace(0., 180., max(image.shape), endpoint=False)
     # sinogram = sinogramWithSkimage(image, theta)
     # reconstruction = backProjectionWithSkimage(sinogram, theta)
     # diaplyAll(image, sinogram, reconstruction, normal)
 
 if __name__=='__main__':
-    tomograf(0)
+    listaNazw=["Shepp_logan","SADDLE_PE","CT_ScoutView","Kolo","Paski2","Kropka"]
+
+    for i in listaNazw:
+        image = imread("./obrazy/" + i+".jpg", as_gray=True)
+        image = rescale(image, scale=0.25, mode='reflect', multichannel=False)
+        coIteracje,zwykly,filtry = tomograf(image.copy())
+        file = open(i+'.txt', 'w')
+        file.write(str(zwykly) + '\n')
+        file.write(str(filtry) + '\n')
+        for i in coIteracje:
+            file.write(str(i)+'\n')
+        file.write("-1\n")
+        for j in [0.5,1,1.5,2,5,10,15,20]:
+            coIteracje, zwykly, filtry = tomograf(image.copy(),alphaStep=j)
+            file.write(str(zwykly) + '\n')
+            print(j)
+            if test:
+                break
+        file.write("-2\n")
+        for j in [15,31,41,51,61,71,81,91,101,111,141,161,181,221,241,261,281,301]:
+            coIteracje, zwykly, filtry = tomograf(image.copy(),sensorCount=j,alphaStep=1)
+            file.write(str(zwykly) + '\n')
+            print(j)
+            if test:
+                break
+        file.write("-3\n")
+        for j in [30,40,50,60,70,80,90,100,110,120,140,160,180,200,220,240,270]:
+            coIteracje, zwykly, filtry = tomograf(image.copy(), theta=j,alphaStep=1)
+            file.write(str(zwykly) + '\n')
+            print(j)
+            if test:
+                break
+        file.write("-4\n")
+        file.close()
+        print(i)
+    # image = imread("org.png", as_gray=True)
+    # recon = imread("recon.png", as_gray=True)
+    # print(bladSredniokwadratowy(image,recon))
